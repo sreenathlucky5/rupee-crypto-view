@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign } from 'lucide-react';
+import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -19,6 +18,8 @@ interface CryptoData {
   market_cap_usd: number;
   total_volume: number;
   image: string;
+  genesis_date: string | null;
+  is_new: boolean;
 }
 
 const fetchCryptoData = async (): Promise<CryptoData[]> => {
@@ -35,13 +36,20 @@ const fetchCryptoData = async (): Promise<CryptoData[]> => {
   const inrData = await inrResponse.json();
   const usdData = await usdResponse.json();
 
-  // Combine INR and USD data
+  // Combine INR and USD data and check for new coins
   const combinedData = inrData.map((inrCoin: any) => {
     const usdCoin = usdData.find((coin: any) => coin.id === inrCoin.id);
+    
+    // Check if coin is new (launched within last 30 days)
+    const isNew = inrCoin.genesis_date ? 
+      (new Date().getTime() - new Date(inrCoin.genesis_date).getTime()) / (1000 * 60 * 60 * 24) <= 30 : 
+      false;
+
     return {
       ...inrCoin,
       current_price_usd: usdCoin?.current_price || 0,
       market_cap_usd: usdCoin?.market_cap || 0,
+      is_new: isNew,
     };
   });
 
@@ -216,13 +224,26 @@ const Index = () => {
               {filteredData?.map((coin) => (
                 <div
                   key={coin.id}
-                  className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors cursor-pointer"
+                  className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors cursor-pointer relative"
                   onClick={() => setSelectedFromCoin(coin.id)}
                 >
+                  {coin.is_new && (
+                    <div className="absolute -top-2 -right-2 z-10">
+                      <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs px-2 py-1 animate-pulse">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        NEW
+                      </Badge>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
                     <img src={coin.image} alt={coin.name} className="w-8 h-8" />
                     <div>
-                      <p className="font-semibold text-white">{coin.name}</p>
+                      <p className="font-semibold text-white flex items-center gap-2">
+                        {coin.name}
+                        {coin.is_new && (
+                          <Sparkles className="h-4 w-4 text-yellow-400" />
+                        )}
+                      </p>
                       <p className="text-sm text-slate-400 uppercase">{coin.symbol}</p>
                     </div>
                   </div>
@@ -293,6 +314,7 @@ const Index = () => {
                             <div className="flex items-center gap-2">
                               <img src={coin.image} alt={coin.name} className="w-4 h-4" />
                               <span>{coin.name} ({coin.symbol.toUpperCase()})</span>
+                              {coin.is_new && <Sparkles className="h-3 w-3 text-yellow-400" />}
                             </div>
                           </SelectItem>
                         ))}
@@ -338,6 +360,7 @@ const Index = () => {
                             <div className="flex items-center gap-2">
                               <img src={coin.image} alt={coin.name} className="w-4 h-4" />
                               <span>{coin.name} ({coin.symbol.toUpperCase()})</span>
+                              {coin.is_new && <Sparkles className="h-3 w-3 text-yellow-400" />}
                             </div>
                           </SelectItem>
                         ))}
@@ -352,10 +375,18 @@ const Index = () => {
                 <h3 className="text-lg font-semibold text-white mb-4">Top Market Caps</h3>
                 <div className="grid grid-cols-2 gap-4">
                   {cryptoData?.slice(0, 4).map((coin) => (
-                    <div key={coin.id} className="bg-slate-700/30 p-3 rounded-lg">
+                    <div key={coin.id} className="bg-slate-700/30 p-3 rounded-lg relative">
+                      {coin.is_new && (
+                        <div className="absolute -top-1 -right-1">
+                          <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs px-1 py-0">
+                            NEW
+                          </Badge>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 mb-2">
                         <img src={coin.image} alt={coin.name} className="w-5 h-5" />
                         <span className="text-sm font-medium text-white">{coin.symbol.toUpperCase()}</span>
+                        {coin.is_new && <Sparkles className="h-3 w-3 text-yellow-400" />}
                       </div>
                       <p className="text-xs text-slate-400">Market Cap</p>
                       <p className="text-sm font-semibold text-white">
