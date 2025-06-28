@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft } from 'lucide-react';
+import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,20 +13,39 @@ interface CryptoData {
   symbol: string;
   name: string;
   current_price: number;
+  current_price_usd: number;
   price_change_percentage_24h: number;
   market_cap: number;
+  market_cap_usd: number;
   total_volume: number;
   image: string;
 }
 
 const fetchCryptoData = async (): Promise<CryptoData[]> => {
-  const response = await fetch(
-    'https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&order=market_cap_desc&per_page=50&page=1&sparkline=false'
-  );
-  if (!response.ok) {
+  // Fetch data in both INR and USD
+  const [inrResponse, usdResponse] = await Promise.all([
+    fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&order=market_cap_desc&per_page=100&page=1&sparkline=false'),
+    fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false')
+  ]);
+
+  if (!inrResponse.ok || !usdResponse.ok) {
     throw new Error('Failed to fetch crypto data');
   }
-  return response.json();
+
+  const inrData = await inrResponse.json();
+  const usdData = await usdResponse.json();
+
+  // Combine INR and USD data
+  const combinedData = inrData.map((inrCoin: any) => {
+    const usdCoin = usdData.find((coin: any) => coin.id === inrCoin.id);
+    return {
+      ...inrCoin,
+      current_price_usd: usdCoin?.current_price || 0,
+      market_cap_usd: usdCoin?.market_cap || 0,
+    };
+  });
+
+  return combinedData;
 };
 
 const Index = () => {
@@ -35,42 +54,59 @@ const Index = () => {
   const [selectedToCoin, setSelectedToCoin] = useState('inr');
   const [fromAmount, setFromAmount] = useState('1');
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [showUSD, setShowUSD] = useState(false);
 
   const { data: cryptoData, isLoading, error, refetch } = useQuery({
     queryKey: ['cryptoData'],
     queryFn: fetchCryptoData,
-    refetchInterval: 60000, // Refresh every 60 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
     const interval = setInterval(() => {
       setLastUpdate(new Date());
-    }, 60000);
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-refresh on component mount and every 30 seconds
+  useEffect(() => {
+    const autoRefresh = setInterval(() => {
+      refetch();
+    }, 30000);
+    return () => clearInterval(autoRefresh);
+  }, [refetch]);
 
   const filteredData = cryptoData?.filter(coin =>
     coin.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     coin.symbol.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const formatPrice = (price: number) => {
+  const formatPrice = (price: number, isUSD = false) => {
+    const currency = isUSD ? '$' : '₹';
     if (price >= 100000) {
-      return `₹${(price / 100000).toFixed(2)}L`;
+      return `${currency}${(price / 100000).toFixed(2)}L`;
     } else if (price >= 1000) {
-      return `₹${(price / 1000).toFixed(2)}K`;
+      return `${currency}${(price / 1000).toFixed(2)}K`;
+    } else if (price >= 1) {
+      return `${currency}${price.toFixed(2)}`;
     } else {
-      return `₹${price.toFixed(2)}`;
+      return `${currency}${price.toFixed(6)}`;
     }
   };
 
-  const formatMarketCap = (cap: number) => {
-    if (cap >= 10000000000) {
-      return `₹${(cap / 10000000000).toFixed(2)}B`;
-    } else if (cap >= 10000000) {
-      return `₹${(cap / 10000000).toFixed(2)}M`;
+  const formatMarketCap = (cap: number, isUSD = false) => {
+    const currency = isUSD ? '$' : '₹';
+    if (cap >= 1000000000000) {
+      return `${currency}${(cap / 1000000000000).toFixed(2)}T`;
+    } else if (cap >= 1000000000) {
+      return `${currency}${(cap / 1000000000).toFixed(2)}B`;
+    } else if (cap >= 1000000) {
+      return `${currency}${(cap / 1000000).toFixed(2)}M`;
     } else {
-      return `₹${(cap / 100000).toFixed(2)}L`;
+      return `${currency}${(cap / 100000).toFixed(2)}L`;
     }
   };
 
@@ -82,8 +118,12 @@ const Index = () => {
     
     if (selectedToCoin === 'inr') {
       return fromCoin ? (parseFloat(fromAmount) * fromCoin.current_price) : 0;
+    } else if (selectedToCoin === 'usd') {
+      return fromCoin ? (parseFloat(fromAmount) * fromCoin.current_price_usd) : 0;
     } else if (selectedFromCoin === 'inr') {
       return toCoin ? (parseFloat(fromAmount) / toCoin.current_price) : 0;
+    } else if (selectedFromCoin === 'usd') {
+      return toCoin ? (parseFloat(fromAmount) / toCoin.current_price_usd) : 0;
     } else if (fromCoin && toCoin) {
       return (parseFloat(fromAmount) * fromCoin.current_price) / toCoin.current_price;
     }
@@ -129,9 +169,18 @@ const Index = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-white mb-2">CryptoTracker</h1>
-              <p className="text-blue-200">Real-time cryptocurrency prices in INR</p>
+              <p className="text-blue-200">Real-time cryptocurrency prices (Top 100 coins)</p>
             </div>
             <div className="flex items-center gap-4">
+              <Button
+                onClick={() => setShowUSD(!showUSD)}
+                variant="outline"
+                size="sm"
+                className={showUSD ? 'bg-green-600 text-white' : ''}
+              >
+                <DollarSign className="h-4 w-4 mr-1" />
+                {showUSD ? 'USD' : 'INR'}
+              </Button>
               <div className="text-right text-sm text-slate-400">
                 <p>Last updated</p>
                 <p>{lastUpdate.toLocaleTimeString()}</p>
@@ -151,7 +200,7 @@ const Index = () => {
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-green-400" />
-                Live Prices
+                Live Prices ({showUSD ? 'USD' : 'INR'})
               </CardTitle>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -178,7 +227,14 @@ const Index = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-white">{formatPrice(coin.current_price)}</p>
+                    <p className="font-semibold text-white">
+                      {formatPrice(showUSD ? coin.current_price_usd : coin.current_price, showUSD)}
+                    </p>
+                    {!showUSD && coin.current_price_usd > 0 && (
+                      <p className="text-xs text-slate-500">
+                        ${coin.current_price_usd.toFixed(2)}
+                      </p>
+                    )}
                     <div className="flex items-center gap-1">
                       {coin.price_change_percentage_24h >= 0 ? (
                         <TrendingUp className="h-3 w-3 text-green-400" />
@@ -219,11 +275,17 @@ const Index = () => {
                       <SelectTrigger className="w-48 bg-slate-700/50 border-slate-600 text-white">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectContent className="bg-slate-800 border-slate-700 max-h-60">
                         <SelectItem value="inr" className="text-white">
                           <div className="flex items-center gap-2">
                             <span>🇮🇳</span>
                             <span>Indian Rupee (INR)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="usd" className="text-white">
+                          <div className="flex items-center gap-2">
+                            <span>🇺🇸</span>
+                            <span>US Dollar (USD)</span>
                           </div>
                         </SelectItem>
                         {cryptoData?.map((coin) => (
@@ -258,11 +320,17 @@ const Index = () => {
                       <SelectTrigger className="w-48 bg-slate-700/50 border-slate-600 text-white">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectContent className="bg-slate-800 border-slate-700 max-h-60">
                         <SelectItem value="inr" className="text-white">
                           <div className="flex items-center gap-2">
                             <span>🇮🇳</span>
                             <span>Indian Rupee (INR)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="usd" className="text-white">
+                          <div className="flex items-center gap-2">
+                            <span>🇺🇸</span>
+                            <span>US Dollar (USD)</span>
                           </div>
                         </SelectItem>
                         {cryptoData?.map((coin) => (
@@ -281,7 +349,7 @@ const Index = () => {
 
               {/* Market Stats */}
               <div className="pt-6 border-t border-slate-700">
-                <h3 className="text-lg font-semibold text-white mb-4">Market Overview</h3>
+                <h3 className="text-lg font-semibold text-white mb-4">Top Market Caps</h3>
                 <div className="grid grid-cols-2 gap-4">
                   {cryptoData?.slice(0, 4).map((coin) => (
                     <div key={coin.id} className="bg-slate-700/30 p-3 rounded-lg">
@@ -290,7 +358,9 @@ const Index = () => {
                         <span className="text-sm font-medium text-white">{coin.symbol.toUpperCase()}</span>
                       </div>
                       <p className="text-xs text-slate-400">Market Cap</p>
-                      <p className="text-sm font-semibold text-white">{formatMarketCap(coin.market_cap)}</p>
+                      <p className="text-sm font-semibold text-white">
+                        {formatMarketCap(showUSD ? coin.market_cap_usd : coin.market_cap, showUSD)}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -302,7 +372,7 @@ const Index = () => {
         {/* Disclaimer */}
         <div className="mt-8 text-center">
           <Badge variant="outline" className="text-slate-400 border-slate-600">
-            Data provided by CoinGecko • Not investment advice • Prices are volatile
+            Data provided by CoinGecko • Auto-refreshes every 30 seconds • Not investment advice
           </Badge>
         </div>
       </div>
