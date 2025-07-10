@@ -20,13 +20,16 @@ interface CryptoData {
   image: string;
   genesis_date: string | null;
   is_new: boolean;
+  market_cap_change_percentage_24h: number;
 }
 
 const fetchCryptoData = async (): Promise<CryptoData[]> => {
-  // Fetch data in both INR and USD
+  console.log('Fetching crypto data...');
+  
+  // Fetch top 250 coins to catch more new listings
   const [inrResponse, usdResponse] = await Promise.all([
-    fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&order=market_cap_desc&per_page=100&page=1&sparkline=false'),
-    fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false')
+    fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&order=market_cap_desc&per_page=250&page=1&sparkline=false&price_change_percentage=24h'),
+    fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false&price_change_percentage=24h')
   ]);
 
   if (!inrResponse.ok || !usdResponse.ok) {
@@ -36,24 +39,32 @@ const fetchCryptoData = async (): Promise<CryptoData[]> => {
   const inrData = await inrResponse.json();
   const usdData = await usdResponse.json();
 
+  console.log('Fetched data for', inrData.length, 'coins');
+
   // Combine INR and USD data and check for new coins
   const combinedData = inrData.map((inrCoin: any) => {
     const usdCoin = usdData.find((coin: any) => coin.id === inrCoin.id);
     
-    // Check if coin is new (launched within last 30 days)
-    const isNew = inrCoin.genesis_date ? 
-      (new Date().getTime() - new Date(inrCoin.genesis_date).getTime()) / (1000 * 60 * 60 * 24) <= 30 : 
-      false;
+    // Check if coin is new (added to CoinGecko within last 7 days or has low market cap rank indicating recent listing)
+    const isNew = inrCoin.market_cap_rank > 200 || 
+      (inrCoin.ath_date && (new Date().getTime() - new Date(inrCoin.ath_date).getTime()) / (1000 * 60 * 60 * 24) <= 7) ||
+      (inrCoin.market_cap_change_percentage_24h > 100); // Coins with huge 24h market cap changes are often new
 
     return {
       ...inrCoin,
       current_price_usd: usdCoin?.current_price || 0,
       market_cap_usd: usdCoin?.market_cap || 0,
+      market_cap_change_percentage_24h: inrCoin.market_cap_change_percentage_24h || 0,
       is_new: isNew,
     };
   });
 
-  return combinedData;
+  // Sort to show new coins and high volume coins first
+  return combinedData.sort((a: any, b: any) => {
+    if (a.is_new && !b.is_new) return -1;
+    if (!a.is_new && b.is_new) return 1;
+    return b.market_cap - a.market_cap;
+  });
 };
 
 const Index = () => {
@@ -63,27 +74,33 @@ const Index = () => {
   const [fromAmount, setFromAmount] = useState('1');
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [showUSD, setShowUSD] = useState(false);
+  const [newCoinsCount, setNewCoinsCount] = useState(0);
 
   const { data: cryptoData, isLoading, error, refetch } = useQuery({
     queryKey: ['cryptoData'],
     queryFn: fetchCryptoData,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 15000, // Refresh every 15 seconds for faster updates
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
+    staleTime: 10000, // Consider data stale after 10 seconds
   });
 
+  // Update last refresh time and count new coins
   useEffect(() => {
-    const interval = setInterval(() => {
+    if (cryptoData) {
       setLastUpdate(new Date());
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+      const newCount = cryptoData.filter(coin => coin.is_new).length;
+      setNewCoinsCount(newCount);
+      console.log(`Updated: ${cryptoData.length} coins, ${newCount} new coins`);
+    }
+  }, [cryptoData]);
 
-  // Auto-refresh on component mount and every 30 seconds
+  // Force refresh every 15 seconds
   useEffect(() => {
     const autoRefresh = setInterval(() => {
+      console.log('Auto-refreshing crypto data...');
       refetch();
-    }, 30000);
+    }, 15000);
     return () => clearInterval(autoRefresh);
   }, [refetch]);
 
@@ -177,7 +194,15 @@ const Index = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-white mb-2">CryptoTracker</h1>
-              <p className="text-blue-200">Real-time cryptocurrency prices (Top 100 coins)</p>
+              <p className="text-blue-200">
+                Real-time cryptocurrency prices ({cryptoData?.length || 0} coins)
+                {newCoinsCount > 0 && (
+                  <Badge className="ml-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-black">
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    {newCoinsCount} NEW
+                  </Badge>
+                )}
+              </p>
             </div>
             <div className="flex items-center gap-4">
               <Button
@@ -190,8 +215,8 @@ const Index = () => {
                 {showUSD ? 'USD' : 'INR'}
               </Button>
               <div className="text-right text-sm text-slate-400">
-                <p>Last updated</p>
-                <p>{lastUpdate.toLocaleTimeString()}</p>
+                <p>Auto-updates every 15s</p>
+                <p>Last: {lastUpdate.toLocaleTimeString()}</p>
               </div>
               <Button onClick={() => refetch()} variant="outline" size="sm">
                 <RefreshCw className="h-4 w-4" />
@@ -209,6 +234,11 @@ const Index = () => {
               <CardTitle className="text-white flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-green-400" />
                 Live Prices ({showUSD ? 'USD' : 'INR'})
+                {newCoinsCount > 0 && (
+                  <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs">
+                    {newCoinsCount} NEW
+                  </Badge>
+                )}
               </CardTitle>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -403,7 +433,7 @@ const Index = () => {
         {/* Disclaimer */}
         <div className="mt-8 text-center">
           <Badge variant="outline" className="text-slate-400 border-slate-600">
-            Data provided by CoinGecko • Auto-refreshes every 30 seconds • Not investment advice
+            Data provided by CoinGecko • Auto-refreshes every 15 seconds • {cryptoData?.length || 0} coins tracked • Not investment advice
           </Badge>
         </div>
       </div>
