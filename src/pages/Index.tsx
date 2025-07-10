@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign, Sparkles, Shield } from 'lucide-react';
+import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign, Shield, Mail } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 
 interface CryptoData {
   id: string;
@@ -27,45 +28,31 @@ interface CryptoData {
 const fetchCryptoData = async (): Promise<CryptoData[]> => {
   console.log('Fetching crypto data...');
   
-  // Fetch top 250 coins to catch more new listings
-  const [inrResponse, usdResponse] = await Promise.all([
-    fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&order=market_cap_desc&per_page=250&page=1&sparkline=false&price_change_percentage=24h'),
-    fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false&price_change_percentage=24h')
-  ]);
-
-  if (!inrResponse.ok || !usdResponse.ok) {
-    throw new Error('Failed to fetch crypto data');
-  }
-
-  const inrData = await inrResponse.json();
-  const usdData = await usdResponse.json();
-
-  console.log('Fetched data for', inrData.length, 'coins');
-
-  // Combine INR and USD data and check for new coins
-  const combinedData = inrData.map((inrCoin: any) => {
-    const usdCoin = usdData.find((coin: any) => coin.id === inrCoin.id);
+  try {
+    // Use a more reliable approach with single currency fetch
+    const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&order=market_cap_desc&per_page=100&page=1&sparkline=false&price_change_percentage=24h');
     
-    // Check if coin is new (added to CoinGecko within last 7 days or has low market cap rank indicating recent listing)
-    const isNew = inrCoin.market_cap_rank > 200 || 
-      (inrCoin.ath_date && (new Date().getTime() - new Date(inrCoin.ath_date).getTime()) / (1000 * 60 * 60 * 24) <= 7) ||
-      (inrCoin.market_cap_change_percentage_24h > 100); // Coins with huge 24h market cap changes are often new
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-    return {
-      ...inrCoin,
-      current_price_usd: usdCoin?.current_price || 0,
-      market_cap_usd: usdCoin?.market_cap || 0,
-      market_cap_change_percentage_24h: inrCoin.market_cap_change_percentage_24h || 0,
-      is_new: isNew,
-    };
-  });
+    const data = await response.json();
+    console.log('Fetched data for', data.length, 'coins');
 
-  // Sort to show new coins and high volume coins first
-  return combinedData.sort((a: any, b: any) => {
-    if (a.is_new && !b.is_new) return -1;
-    if (!a.is_new && b.is_new) return 1;
-    return b.market_cap - a.market_cap;
-  });
+    // Convert to our expected format
+    const combinedData = data.map((coin: any) => ({
+      ...coin,
+      current_price_usd: coin.current_price / 85, // Approximate USD conversion
+      market_cap_usd: coin.market_cap / 85,
+      market_cap_change_percentage_24h: coin.market_cap_change_percentage_24h || 0,
+      is_new: false, // Remove new coin detection
+    }));
+
+    return combinedData.sort((a: any, b: any) => b.market_cap - a.market_cap);
+  } catch (error) {
+    console.error('Error fetching crypto data:', error);
+    throw error;
+  }
 };
 
 const Index = () => {
@@ -75,35 +62,41 @@ const Index = () => {
   const [fromAmount, setFromAmount] = useState('1');
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [showUSD, setShowUSD] = useState(false);
-  const [newCoinsCount, setNewCoinsCount] = useState(0);
+  const { toast } = useToast();
 
   const { data: cryptoData, isLoading, error, refetch } = useQuery({
     queryKey: ['cryptoData'],
     queryFn: fetchCryptoData,
-    refetchInterval: 15000, // Refresh every 15 seconds for faster updates
+    refetchInterval: 30000, // Reduced frequency to avoid rate limiting
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
-    staleTime: 10000, // Consider data stale after 10 seconds
+    staleTime: 20000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
-  // Update last refresh time and count new coins
+  // Update last refresh time
   useEffect(() => {
     if (cryptoData) {
       setLastUpdate(new Date());
-      const newCount = cryptoData.filter(coin => coin.is_new).length;
-      setNewCoinsCount(newCount);
-      console.log(`Updated: ${cryptoData.length} coins, ${newCount} new coins`);
+      console.log(`Updated: ${cryptoData.length} coins`);
+      toast({
+        title: "Data Updated",
+        description: `Loaded ${cryptoData.length} cryptocurrencies`,
+      });
     }
-  }, [cryptoData]);
+  }, [cryptoData, toast]);
 
-  // Force refresh every 15 seconds
+  // Show error toast when API fails
   useEffect(() => {
-    const autoRefresh = setInterval(() => {
-      console.log('Auto-refreshing crypto data...');
-      refetch();
-    }, 15000);
-    return () => clearInterval(autoRefresh);
-  }, [refetch]);
+    if (error) {
+      toast({
+        title: "API Error",
+        description: "Unable to fetch crypto data. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [error, toast]);
 
   const filteredData = cryptoData?.filter(coin =>
     coin.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -179,6 +172,7 @@ const Index = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-400 mb-4">Failed to load crypto data</p>
+          <p className="text-slate-400 mb-4 text-sm">API might be temporarily unavailable or rate limited</p>
           <Button onClick={() => refetch()} variant="outline" className="hover:scale-105 transition-transform duration-200">
             Try Again
           </Button>
@@ -199,13 +193,11 @@ const Index = () => {
               </h1>
               <p className="text-blue-200">
                 Real-time cryptocurrency prices ({cryptoData?.length || 0} coins)
-                {newCoinsCount > 0 && (
-                  <Badge className="ml-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-black hover:scale-110 transition-transform duration-300 cursor-pointer">
-                    <Sparkles className="h-3 w-3 mr-1" />
-                    {newCoinsCount} NEW
-                  </Badge>
-                )}
               </p>
+              <div className="flex items-center gap-2 mt-2 text-sm text-slate-400">
+                <Mail className="h-4 w-4" />
+                <span>Contact: seelamsreenath4@gmail.com</span>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <Link to="/privacy-policy">
@@ -228,7 +220,7 @@ const Index = () => {
                 {showUSD ? 'USD' : 'INR'}
               </Button>
               <div className="text-right text-sm text-slate-400">
-                <p>Auto-updates every 15s</p>
+                <p>Auto-updates every 30s</p>
                 <p>Last: {lastUpdate.toLocaleTimeString()}</p>
               </div>
               <Button 
@@ -252,11 +244,6 @@ const Index = () => {
               <CardTitle className="text-white flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-green-400" />
                 Live Prices ({showUSD ? 'USD' : 'INR'})
-                {newCoinsCount > 0 && (
-                  <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs hover:scale-110 transition-transform duration-300 cursor-pointer">
-                    {newCoinsCount} NEW
-                  </Badge>
-                )}
               </CardTitle>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4 transition-colors duration-200" />
@@ -272,31 +259,24 @@ const Index = () => {
               {filteredData?.map((coin) => (
                 <div
                   key={coin.id}
-                  className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg hover:bg-slate-600/50 hover:scale-[1.02] transition-all duration-200 cursor-pointer relative group"
+                  className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg hover:bg-slate-600/50 hover:scale-[1.02] hover:shadow-lg transition-all duration-300 cursor-pointer group animate-fade-in"
                   onClick={() => setSelectedFromCoin(coin.id)}
+                  style={{
+                    animation: 'fadeInUp 0.5s ease-out',
+                    animationFillMode: 'both',
+                  }}
                 >
-                  {coin.is_new && (
-                    <div className="absolute -top-2 -right-2 z-10">
-                      <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs px-2 py-1 animate-pulse hover:animate-bounce transition-all duration-300">
-                        <Sparkles className="h-3 w-3 mr-1" />
-                        NEW
-                      </Badge>
-                    </div>
-                  )}
                   <div className="flex items-center gap-3">
                     <img 
                       src={coin.image} 
                       alt={coin.name} 
-                      className="w-8 h-8 group-hover:scale-110 transition-transform duration-200" 
+                      className="w-8 h-8 group-hover:scale-110 transition-transform duration-300" 
                     />
                     <div>
-                      <p className="font-semibold text-white flex items-center gap-2 group-hover:text-blue-300 transition-colors duration-200">
+                      <p className="font-semibold text-white group-hover:text-blue-300 transition-colors duration-200">
                         {coin.name}
-                        {coin.is_new && (
-                          <Sparkles className="h-4 w-4 text-yellow-400 group-hover:animate-spin" />
-                        )}
                       </p>
-                      <p className="text-sm text-slate-400 uppercase">{coin.symbol}</p>
+                      <p className="text-sm text-slate-400 uppercase group-hover:text-slate-300 transition-colors duration-200">{coin.symbol}</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -304,7 +284,7 @@ const Index = () => {
                       {formatPrice(showUSD ? coin.current_price_usd : coin.current_price, showUSD)}
                     </p>
                     {!showUSD && coin.current_price_usd > 0 && (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-500 group-hover:text-slate-400 transition-colors duration-200">
                         ${coin.current_price_usd.toFixed(2)}
                       </p>
                     )}
@@ -314,7 +294,7 @@ const Index = () => {
                       ) : (
                         <TrendingDown className="h-3 w-3 text-red-400 group-hover:animate-bounce" />
                       )}
-                      <span className={`text-sm ${coin.price_change_percentage_24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      <span className={`text-sm transition-colors duration-200 ${coin.price_change_percentage_24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {Math.abs(coin.price_change_percentage_24h).toFixed(2)}%
                       </span>
                     </div>
@@ -366,7 +346,6 @@ const Index = () => {
                             <div className="flex items-center gap-2">
                               <img src={coin.image} alt={coin.name} className="w-4 h-4" />
                               <span>{coin.name} ({coin.symbol.toUpperCase()})</span>
-                              {coin.is_new && <Sparkles className="h-3 w-3 text-yellow-400" />}
                             </div>
                           </SelectItem>
                         ))}
@@ -417,7 +396,6 @@ const Index = () => {
                             <div className="flex items-center gap-2">
                               <img src={coin.image} alt={coin.name} className="w-4 h-4" />
                               <span>{coin.name} ({coin.symbol.toUpperCase()})</span>
-                              {coin.is_new && <Sparkles className="h-3 w-3 text-yellow-400" />}
                             </div>
                           </SelectItem>
                         ))}
@@ -433,13 +411,6 @@ const Index = () => {
                 <div className="grid grid-cols-2 gap-4">
                   {cryptoData?.slice(0, 4).map((coin) => (
                     <div key={coin.id} className="bg-slate-700/30 p-3 rounded-lg relative hover:bg-slate-600/40 hover:scale-105 transition-all duration-200 cursor-pointer group">
-                      {coin.is_new && (
-                        <div className="absolute -top-1 -right-1">
-                          <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs px-1 py-0 group-hover:animate-pulse">
-                            NEW
-                          </Badge>
-                        </div>
-                      )}
                       <div className="flex items-center gap-2 mb-2">
                         <img 
                           src={coin.image} 
@@ -449,7 +420,6 @@ const Index = () => {
                         <span className="text-sm font-medium text-white group-hover:text-blue-300 transition-colors duration-200">
                           {coin.symbol.toUpperCase()}
                         </span>
-                        {coin.is_new && <Sparkles className="h-3 w-3 text-yellow-400 group-hover:animate-spin" />}
                       </div>
                       <p className="text-xs text-slate-400">Market Cap</p>
                       <p className="text-sm font-semibold text-white group-hover:text-green-400 transition-colors duration-200">
@@ -466,10 +436,23 @@ const Index = () => {
         {/* Disclaimer */}
         <div className="mt-8 text-center">
           <Badge variant="outline" className="text-slate-400 border-slate-600 hover:border-blue-500 hover:text-blue-300 transition-all duration-300 cursor-default">
-            Data provided by CoinGecko • Auto-refreshes every 15 seconds • {cryptoData?.length || 0} coins tracked • Not investment advice
+            Data provided by CoinGecko • Auto-refreshes every 30 seconds • {cryptoData?.length || 0} coins tracked • Not investment advice
           </Badge>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 };
