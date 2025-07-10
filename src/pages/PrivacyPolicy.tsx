@@ -1,7 +1,6 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Shield, Eye, Cookie, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Shield, Eye, Cookie, AlertCircle, Mail } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const PrivacyPolicy = () => {
@@ -167,12 +166,21 @@ const PrivacyPolicy = () => {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-3">Contact Us</h2>
+              <h2 className="text-xl font-semibold text-white mb-3 flex items-center gap-2">
+                <Mail className="h-5 w-5 text-blue-400" />
+                Contact Us
+              </h2>
               <p className="mb-4">
                 If you have any questions about this Privacy Policy or our data practices, please contact us at:
               </p>
               <div className="bg-slate-700/50 p-4 rounded-lg">
-                <p><strong>Email:</strong> privacy@cryptotoinr.com</p>
+                <p className="flex items-center gap-2 mb-2">
+                  <Mail className="h-4 w-4 text-blue-400" />
+                  <strong>Email:</strong> 
+                  <a href="mailto:seelamsreenath4@gmail.com" className="text-blue-400 hover:text-blue-300 underline">
+                    seelamsreenath4@gmail.com
+                  </a>
+                </p>
                 <p><strong>Website:</strong> cryptotoinr.com</p>
               </div>
             </section>

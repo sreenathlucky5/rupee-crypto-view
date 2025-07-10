@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign, Shield, Mail } from 'lucide-react';
+import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign, Shield } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -26,29 +27,38 @@ interface CryptoData {
 }
 
 const fetchCryptoData = async (): Promise<CryptoData[]> => {
-  console.log('Fetching crypto data...');
+  console.log('Fetching crypto data from free API...');
   
   try {
-    // Use a more reliable approach with single currency fetch
-    const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&order=market_cap_desc&per_page=100&page=1&sparkline=false&price_change_percentage=24h');
+    // Using CoinLore API - completely free, no API key required
+    const response = await fetch('https://api.coinlore.net/api/tickers/?start=0&limit=100');
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log('Fetched data for', data.length, 'coins');
+    const result = await response.json();
+    const data = result.data;
+    console.log('Fetched data for', data.length, 'coins from CoinLore API');
 
-    // Convert to our expected format
+    // Convert CoinLore format to our expected format
     const combinedData = data.map((coin: any) => ({
-      ...coin,
-      current_price_usd: coin.current_price / 85, // Approximate USD conversion
-      market_cap_usd: coin.market_cap / 85,
-      market_cap_change_percentage_24h: coin.market_cap_change_percentage_24h || 0,
-      is_new: false, // Remove new coin detection
+      id: coin.id,
+      symbol: coin.symbol.toLowerCase(),
+      name: coin.name,
+      current_price: parseFloat(coin.price_usd) * 85, // Convert to INR (approximate)
+      current_price_usd: parseFloat(coin.price_usd),
+      price_change_percentage_24h: parseFloat(coin.percent_change_24h) || 0,
+      market_cap: parseFloat(coin.market_cap_usd) * 85, // Convert to INR
+      market_cap_usd: parseFloat(coin.market_cap_usd),
+      total_volume: 0, // CoinLore doesn't provide volume
+      image: `https://cryptologos.cc/logos/${coin.name.toLowerCase().replace(/\s+/g, '-')}-${coin.symbol.toLowerCase()}-logo.png`,
+      genesis_date: null,
+      is_new: false,
+      market_cap_change_percentage_24h: parseFloat(coin.percent_change_24h) || 0,
     }));
 
-    return combinedData.sort((a: any, b: any) => b.market_cap - a.market_cap);
+    return combinedData.filter((coin: any) => coin.current_price_usd > 0).sort((a: any, b: any) => b.market_cap_usd - a.market_cap_usd);
   } catch (error) {
     console.error('Error fetching crypto data:', error);
     throw error;
@@ -67,10 +77,10 @@ const Index = () => {
   const { data: cryptoData, isLoading, error, refetch } = useQuery({
     queryKey: ['cryptoData'],
     queryFn: fetchCryptoData,
-    refetchInterval: 30000, // Reduced frequency to avoid rate limiting
+    refetchInterval: 60000, // Update every minute
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
-    staleTime: 20000,
+    staleTime: 30000,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
@@ -172,7 +182,7 @@ const Index = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-400 mb-4">Failed to load crypto data</p>
-          <p className="text-slate-400 mb-4 text-sm">API might be temporarily unavailable or rate limited</p>
+          <p className="text-slate-400 mb-4 text-sm">API might be temporarily unavailable</p>
           <Button onClick={() => refetch()} variant="outline" className="hover:scale-105 transition-transform duration-200">
             Try Again
           </Button>
@@ -226,10 +236,6 @@ const Index = () => {
                 <p className="text-blue-200">
                   Real-time cryptocurrency prices ({cryptoData?.length || 0} coins)
                 </p>
-                <div className="flex items-center gap-2 mt-2 text-sm text-slate-400">
-                  <Mail className="h-4 w-4" />
-                  <span>Contact: seelamsreenath4@gmail.com</span>
-                </div>
               </div>
               <div className="flex items-center gap-4">
                 <Link to="/privacy-policy">
@@ -252,7 +258,7 @@ const Index = () => {
                   {showUSD ? 'USD' : 'INR'}
                 </Button>
                 <div className="text-right text-sm text-slate-400">
-                  <p>Auto-updates every 30s</p>
+                  <p>Auto-updates every minute</p>
                   <p>Last: {lastUpdate.toLocaleTimeString()}</p>
                 </div>
                 <Button 
