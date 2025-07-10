@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign, Sparkles } from 'lucide-react';
+import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign, Sparkles, Shield } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Link } from 'react-router-dom';
 
 interface CryptoData {
   id: string;
@@ -178,7 +179,7 @@ const Index = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-400 mb-4">Failed to load crypto data</p>
-          <Button onClick={() => refetch()} variant="outline">
+          <Button onClick={() => refetch()} variant="outline" className="hover:scale-105 transition-transform duration-200">
             Try Again
           </Button>
         </div>
@@ -193,11 +194,13 @@ const Index = () => {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">CryptoTracker</h1>
+              <h1 className="text-3xl font-bold text-white mb-2 hover:text-blue-300 transition-colors duration-300">
+                Crypto to INR
+              </h1>
               <p className="text-blue-200">
                 Real-time cryptocurrency prices ({cryptoData?.length || 0} coins)
                 {newCoinsCount > 0 && (
-                  <Badge className="ml-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-black">
+                  <Badge className="ml-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-black hover:scale-110 transition-transform duration-300 cursor-pointer">
                     <Sparkles className="h-3 w-3 mr-1" />
                     {newCoinsCount} NEW
                   </Badge>
@@ -205,11 +208,21 @@ const Index = () => {
               </p>
             </div>
             <div className="flex items-center gap-4">
+              <Link to="/privacy-policy">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:scale-105 hover:bg-blue-600 transition-all duration-200"
+                >
+                  <Shield className="h-4 w-4 mr-1" />
+                  Privacy
+                </Button>
+              </Link>
               <Button
                 onClick={() => setShowUSD(!showUSD)}
                 variant="outline"
                 size="sm"
-                className={showUSD ? 'bg-green-600 text-white' : ''}
+                className={`hover:scale-105 transition-all duration-200 ${showUSD ? 'bg-green-600 text-white hover:bg-green-700' : 'hover:bg-green-600'}`}
               >
                 <DollarSign className="h-4 w-4 mr-1" />
                 {showUSD ? 'USD' : 'INR'}
@@ -218,7 +231,12 @@ const Index = () => {
                 <p>Auto-updates every 15s</p>
                 <p>Last: {lastUpdate.toLocaleTimeString()}</p>
               </div>
-              <Button onClick={() => refetch()} variant="outline" size="sm">
+              <Button 
+                onClick={() => refetch()} 
+                variant="outline" 
+                size="sm"
+                className="hover:scale-105 hover:rotate-180 transition-all duration-300"
+              >
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
@@ -229,24 +247,24 @@ const Index = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Left Panel - Crypto List */}
-          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
+          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm hover:bg-slate-800/70 transition-all duration-300 hover:shadow-xl">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-green-400" />
                 Live Prices ({showUSD ? 'USD' : 'INR'})
                 {newCoinsCount > 0 && (
-                  <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs">
+                  <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs hover:scale-110 transition-transform duration-300 cursor-pointer">
                     {newCoinsCount} NEW
                   </Badge>
                 )}
               </CardTitle>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4 transition-colors duration-200" />
                 <Input
                   placeholder="Search cryptocurrencies..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
+                  className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                 />
               </div>
             </CardHeader>
@@ -254,31 +272,35 @@ const Index = () => {
               {filteredData?.map((coin) => (
                 <div
                   key={coin.id}
-                  className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors cursor-pointer relative"
+                  className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg hover:bg-slate-600/50 hover:scale-[1.02] transition-all duration-200 cursor-pointer relative group"
                   onClick={() => setSelectedFromCoin(coin.id)}
                 >
                   {coin.is_new && (
                     <div className="absolute -top-2 -right-2 z-10">
-                      <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs px-2 py-1 animate-pulse">
+                      <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs px-2 py-1 animate-pulse hover:animate-bounce transition-all duration-300">
                         <Sparkles className="h-3 w-3 mr-1" />
                         NEW
                       </Badge>
                     </div>
                   )}
                   <div className="flex items-center gap-3">
-                    <img src={coin.image} alt={coin.name} className="w-8 h-8" />
+                    <img 
+                      src={coin.image} 
+                      alt={coin.name} 
+                      className="w-8 h-8 group-hover:scale-110 transition-transform duration-200" 
+                    />
                     <div>
-                      <p className="font-semibold text-white flex items-center gap-2">
+                      <p className="font-semibold text-white flex items-center gap-2 group-hover:text-blue-300 transition-colors duration-200">
                         {coin.name}
                         {coin.is_new && (
-                          <Sparkles className="h-4 w-4 text-yellow-400" />
+                          <Sparkles className="h-4 w-4 text-yellow-400 group-hover:animate-spin" />
                         )}
                       </p>
                       <p className="text-sm text-slate-400 uppercase">{coin.symbol}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-white">
+                    <p className="font-semibold text-white group-hover:text-green-400 transition-colors duration-200">
                       {formatPrice(showUSD ? coin.current_price_usd : coin.current_price, showUSD)}
                     </p>
                     {!showUSD && coin.current_price_usd > 0 && (
@@ -288,9 +310,9 @@ const Index = () => {
                     )}
                     <div className="flex items-center gap-1">
                       {coin.price_change_percentage_24h >= 0 ? (
-                        <TrendingUp className="h-3 w-3 text-green-400" />
+                        <TrendingUp className="h-3 w-3 text-green-400 group-hover:animate-bounce" />
                       ) : (
-                        <TrendingDown className="h-3 w-3 text-red-400" />
+                        <TrendingDown className="h-3 w-3 text-red-400 group-hover:animate-bounce" />
                       )}
                       <span className={`text-sm ${coin.price_change_percentage_24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {Math.abs(coin.price_change_percentage_24h).toFixed(2)}%
@@ -303,7 +325,7 @@ const Index = () => {
           </Card>
 
           {/* Right Panel - Converter */}
-          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
+          <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm hover:bg-slate-800/70 transition-all duration-300 hover:shadow-xl">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <ArrowRightLeft className="h-5 w-5 text-blue-400" />
@@ -319,28 +341,28 @@ const Index = () => {
                       type="number"
                       value={fromAmount}
                       onChange={(e) => setFromAmount(e.target.value)}
-                      className="bg-slate-700/50 border-slate-600 text-white"
+                      className="bg-slate-700/50 border-slate-600 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                       placeholder="Enter amount"
                     />
                     <Select value={selectedFromCoin} onValueChange={setSelectedFromCoin}>
-                      <SelectTrigger className="w-48 bg-slate-700/50 border-slate-600 text-white">
+                      <SelectTrigger className="w-48 bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50 transition-all duration-200">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700 max-h-60">
-                        <SelectItem value="inr" className="text-white">
+                        <SelectItem value="inr" className="text-white hover:bg-slate-700 transition-colors duration-200">
                           <div className="flex items-center gap-2">
                             <span>🇮🇳</span>
                             <span>Indian Rupee (INR)</span>
                           </div>
                         </SelectItem>
-                        <SelectItem value="usd" className="text-white">
+                        <SelectItem value="usd" className="text-white hover:bg-slate-700 transition-colors duration-200">
                           <div className="flex items-center gap-2">
                             <span>🇺🇸</span>
                             <span>US Dollar (USD)</span>
                           </div>
                         </SelectItem>
                         {cryptoData?.map((coin) => (
-                          <SelectItem key={coin.id} value={coin.id} className="text-white">
+                          <SelectItem key={coin.id} value={coin.id} className="text-white hover:bg-slate-700 transition-colors duration-200">
                             <div className="flex items-center gap-2">
                               <img src={coin.image} alt={coin.name} className="w-4 h-4" />
                               <span>{coin.name} ({coin.symbol.toUpperCase()})</span>
@@ -354,7 +376,12 @@ const Index = () => {
                 </div>
 
                 <div className="flex justify-center">
-                  <Button onClick={swapCurrencies} variant="outline" size="sm">
+                  <Button 
+                    onClick={swapCurrencies} 
+                    variant="outline" 
+                    size="sm"
+                    className="hover:scale-110 hover:rotate-180 transition-all duration-300"
+                  >
                     <ArrowRightLeft className="h-4 w-4" />
                   </Button>
                 </div>
@@ -369,24 +396,24 @@ const Index = () => {
                       className="bg-slate-700/30 border-slate-600 text-white"
                     />
                     <Select value={selectedToCoin} onValueChange={setSelectedToCoin}>
-                      <SelectTrigger className="w-48 bg-slate-700/50 border-slate-600 text-white">
+                      <SelectTrigger className="w-48 bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50 transition-all duration-200">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-700 max-h-60">
-                        <SelectItem value="inr" className="text-white">
+                        <SelectItem value="inr" className="text-white hover:bg-slate-700 transition-colors duration-200">
                           <div className="flex items-center gap-2">
                             <span>🇮🇳</span>
                             <span>Indian Rupee (INR)</span>
                           </div>
                         </SelectItem>
-                        <SelectItem value="usd" className="text-white">
+                        <SelectItem value="usd" className="text-white hover:bg-slate-700 transition-colors duration-200">
                           <div className="flex items-center gap-2">
                             <span>🇺🇸</span>
                             <span>US Dollar (USD)</span>
                           </div>
                         </SelectItem>
                         {cryptoData?.map((coin) => (
-                          <SelectItem key={coin.id} value={coin.id} className="text-white">
+                          <SelectItem key={coin.id} value={coin.id} className="text-white hover:bg-slate-700 transition-colors duration-200">
                             <div className="flex items-center gap-2">
                               <img src={coin.image} alt={coin.name} className="w-4 h-4" />
                               <span>{coin.name} ({coin.symbol.toUpperCase()})</span>
@@ -405,21 +432,27 @@ const Index = () => {
                 <h3 className="text-lg font-semibold text-white mb-4">Top Market Caps</h3>
                 <div className="grid grid-cols-2 gap-4">
                   {cryptoData?.slice(0, 4).map((coin) => (
-                    <div key={coin.id} className="bg-slate-700/30 p-3 rounded-lg relative">
+                    <div key={coin.id} className="bg-slate-700/30 p-3 rounded-lg relative hover:bg-slate-600/40 hover:scale-105 transition-all duration-200 cursor-pointer group">
                       {coin.is_new && (
                         <div className="absolute -top-1 -right-1">
-                          <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs px-1 py-0">
+                          <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black text-xs px-1 py-0 group-hover:animate-pulse">
                             NEW
                           </Badge>
                         </div>
                       )}
                       <div className="flex items-center gap-2 mb-2">
-                        <img src={coin.image} alt={coin.name} className="w-5 h-5" />
-                        <span className="text-sm font-medium text-white">{coin.symbol.toUpperCase()}</span>
-                        {coin.is_new && <Sparkles className="h-3 w-3 text-yellow-400" />}
+                        <img 
+                          src={coin.image} 
+                          alt={coin.name} 
+                          className="w-5 h-5 group-hover:scale-110 transition-transform duration-200" 
+                        />
+                        <span className="text-sm font-medium text-white group-hover:text-blue-300 transition-colors duration-200">
+                          {coin.symbol.toUpperCase()}
+                        </span>
+                        {coin.is_new && <Sparkles className="h-3 w-3 text-yellow-400 group-hover:animate-spin" />}
                       </div>
                       <p className="text-xs text-slate-400">Market Cap</p>
-                      <p className="text-sm font-semibold text-white">
+                      <p className="text-sm font-semibold text-white group-hover:text-green-400 transition-colors duration-200">
                         {formatMarketCap(showUSD ? coin.market_cap_usd : coin.market_cap, showUSD)}
                       </p>
                     </div>
@@ -432,7 +465,7 @@ const Index = () => {
 
         {/* Disclaimer */}
         <div className="mt-8 text-center">
-          <Badge variant="outline" className="text-slate-400 border-slate-600">
+          <Badge variant="outline" className="text-slate-400 border-slate-600 hover:border-blue-500 hover:text-blue-300 transition-all duration-300 cursor-default">
             Data provided by CoinGecko • Auto-refreshes every 15 seconds • {cryptoData?.length || 0} coins tracked • Not investment advice
           </Badge>
         </div>
