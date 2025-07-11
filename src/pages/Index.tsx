@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, RefreshCw, TrendingUp, TrendingDown, ArrowRightLeft, DollarSign, Shield } from 'lucide-react';
@@ -41,6 +40,24 @@ const fetchCryptoData = async (): Promise<CryptoData[]> => {
     const data = result.data;
     console.log('Fetched data for', data.length, 'coins from CoinLore API');
 
+    // Function to get coin logo URL with fallbacks
+    const getCoinImageUrl = (coin: any) => {
+      const symbol = coin.symbol.toLowerCase();
+      const name = coin.name.toLowerCase().replace(/\s+/g, '-');
+      
+      // Try multiple image sources with fallbacks
+      const imageUrls = [
+        `https://cryptoicons.org/api/icon/${symbol}/200`,
+        `https://assets.coincap.io/assets/icons/${symbol}@2x.png`,
+        `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/${symbol}.svg`,
+        `https://raw.githubusercontent.com/ErikThiart/cryptocurrency-icons/master/16/${symbol}.png`,
+        // Generic fallback
+        `https://via.placeholder.com/32x32/3B82F6/FFFFFF?text=${symbol.toUpperCase().charAt(0)}`
+      ];
+      
+      return imageUrls[0]; // Primary source
+    };
+
     // Convert CoinLore format to our expected format
     const combinedData = data.map((coin: any) => ({
       id: coin.id,
@@ -52,7 +69,7 @@ const fetchCryptoData = async (): Promise<CryptoData[]> => {
       market_cap: parseFloat(coin.market_cap_usd) * 85, // Convert to INR
       market_cap_usd: parseFloat(coin.market_cap_usd),
       total_volume: 0, // CoinLore doesn't provide volume
-      image: `https://cryptologos.cc/logos/${coin.name.toLowerCase().replace(/\s+/g, '-')}-${coin.symbol.toLowerCase()}-logo.png`,
+      image: getCoinImageUrl(coin),
       genesis_date: null,
       is_new: false,
       market_cap_change_percentage_24h: parseFloat(coin.percent_change_24h) || 0,
@@ -164,6 +181,27 @@ const Index = () => {
     const temp = selectedFromCoin;
     setSelectedFromCoin(selectedToCoin);
     setSelectedToCoin(temp);
+  };
+
+  // Handle image load errors with fallback
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    const img = e.target as HTMLImageElement;
+    const symbol = img.alt.split(' ')[0].toLowerCase();
+    
+    // Try different fallback URLs
+    const fallbacks = [
+      `https://assets.coincap.io/assets/icons/${symbol}@2x.png`,
+      `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/${symbol}.svg`,
+      `https://raw.githubusercontent.com/ErikThiart/cryptocurrency-icons/master/16/${symbol}.png`,
+      `https://via.placeholder.com/32x32/3B82F6/FFFFFF?text=${symbol.toUpperCase().charAt(0)}`
+    ];
+    
+    const currentSrc = img.src;
+    const currentIndex = fallbacks.findIndex(url => currentSrc.includes(url.split('/').pop()?.split('.')[0] || ''));
+    
+    if (currentIndex < fallbacks.length - 1) {
+      img.src = fallbacks[currentIndex + 1];
+    }
   };
 
   if (isLoading) {
@@ -306,11 +344,13 @@ const Index = () => {
                     <div className="flex items-center gap-3">
                       <img 
                         src={coin.image} 
-                        alt={coin.name} 
-                        className="w-8 h-8 group-hover:scale-110 transition-transform duration-300 animate-float" 
+                        alt={`${coin.name} ${coin.symbol}`}
+                        className="w-8 h-8 group-hover:scale-110 transition-transform duration-300 animate-float rounded-full bg-slate-600 p-1" 
                         style={{
                           animationDelay: `${index * 0.2}s`,
                         }}
+                        onError={handleImageError}
+                        loading="lazy"
                       />
                       <div>
                         <p className="font-semibold text-white group-hover:text-blue-300 transition-colors duration-200">
@@ -384,7 +424,12 @@ const Index = () => {
                           {cryptoData?.map((coin) => (
                             <SelectItem key={coin.id} value={coin.id} className="text-white hover:bg-slate-700 transition-colors duration-200">
                               <div className="flex items-center gap-2">
-                                <img src={coin.image} alt={coin.name} className="w-4 h-4" />
+                                <img 
+                                  src={coin.image} 
+                                  alt={coin.name} 
+                                  className="w-4 h-4 rounded-full"
+                                  onError={handleImageError}
+                                />
                                 <span>{coin.name} ({coin.symbol.toUpperCase()})</span>
                               </div>
                             </SelectItem>
@@ -434,7 +479,12 @@ const Index = () => {
                           {cryptoData?.map((coin) => (
                             <SelectItem key={coin.id} value={coin.id} className="text-white hover:bg-slate-700 transition-colors duration-200">
                               <div className="flex items-center gap-2">
-                                <img src={coin.image} alt={coin.name} className="w-4 h-4" />
+                                <img 
+                                  src={coin.image} 
+                                  alt={coin.name} 
+                                  className="w-4 h-4 rounded-full"
+                                  onError={handleImageError}
+                                />
                                 <span>{coin.name} ({coin.symbol.toUpperCase()})</span>
                               </div>
                             </SelectItem>
@@ -461,10 +511,11 @@ const Index = () => {
                           <img 
                             src={coin.image} 
                             alt={coin.name} 
-                            className="w-5 h-5 group-hover:scale-110 transition-transform duration-200 animate-float" 
+                            className="w-5 h-5 group-hover:scale-110 transition-transform duration-200 animate-float rounded-full" 
                             style={{
                               animationDelay: `${index * 0.3}s`,
                             }}
+                            onError={handleImageError}
                           />
                           <span className="text-sm font-medium text-white group-hover:text-blue-300 transition-colors duration-200">
                             {coin.symbol.toUpperCase()}
@@ -485,7 +536,7 @@ const Index = () => {
           {/* Disclaimer */}
           <div className="mt-8 text-center">
             <Badge variant="outline" className="text-slate-400 border-slate-600 hover:border-blue-500 hover:text-blue-300 transition-all duration-300 cursor-default">
-              Data provided by CoinGecko • Auto-refreshes every 30 seconds • {cryptoData?.length || 0} coins tracked • Not investment advice
+              Data provided by CoinLore • Auto-refreshes every minute • {cryptoData?.length || 0} coins tracked • Not investment advice
             </Badge>
           </div>
         </div>
